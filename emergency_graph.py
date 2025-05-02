@@ -5,7 +5,12 @@ This module defines the city emergency zone graph structure with nodes
 representing locations and edges representing routes between locations.
 
 Each edge has a weight representing travel time in minutes.
+
+Update: Added Visualization of the CityGraph using NetworkX and matplotlib to render this map
 """
+
+import networkx as nx
+import matplotlib.pyplot as plt
 
 class EmergencyGraph:
     """
@@ -114,8 +119,22 @@ def create_sample_city():
     
     return city
 
-
-if __name__ == "__main__":
-    # Test the graph creation
-    test_city = create_sample_city()
-    print(test_city)
+def visualize_graph(graph: EmergencyGraph):
+    """
+    Render the emergency graph using NetworkX & Matplotlib.
+    """
+    G = nx.Graph()
+    # Add Nodes
+    for v in graph.get_all_vertices():
+        G.add_node(v)
+    # Add Edges + Weights
+    for v in graph.get_all_vertices():
+        for nbr, w in graph.get_neighbors(v).items():
+            G.add_edge(v, nbr, weight=w)
+    # Map Layout
+    pos = nx.spring_layout(G)
+    nx.draw(G, pos, with_labels=True)
+    edge_labels = nx.get_edge_attributes(G, 'weight')
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
+    plt.title("City Emergency Response Map")
+    plt.show()
