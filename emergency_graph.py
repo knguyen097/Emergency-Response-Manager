@@ -127,10 +127,12 @@ def visualize_graph(graph: EmergencyGraph):
     # Add Nodes
     for v in graph.get_all_vertices():
         G.add_node(v)
+        
     # Add Edges + Weights
     for v in graph.get_all_vertices():
         for nbr, w in graph.get_neighbors(v).items():
             G.add_edge(v, nbr, weight=w)
+            
     # Map Layout
     pos = nx.spring_layout(G)
     nx.draw(G, pos, with_labels=True)
