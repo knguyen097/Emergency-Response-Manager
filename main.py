@@ -8,7 +8,7 @@ def main():
     # Create a sample city graph
     city = create_sample_city()
     
-    # Print the city graph structure
+    # Print the city graph structure 
     print("\nCity Graph Structure:")
     print(city)
     
