@@ -8,6 +8,56 @@ import random
 from datetime import datetime, timedelta
 from incident_scheduling import IncidentScheduler, Incident, Resource, IncidentType, Priority
 
+# ─────────── Sorting (Merge Sort) ───────────
+def merge_sort(lst, key=lambda x: x):
+    if len(lst) <= 1:
+        return lst
+    mid   = len(lst) // 2
+    left  = merge_sort(lst[:mid], key)
+    right = merge_sort(lst[mid:], key)
+    merged = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        if key(left[i]) <= key(right[j]):
+            merged.append(left[i]); i += 1
+        else:
+            merged.append(right[j]); j += 1
+    merged.extend(left[i:])
+    merged.extend(right[j:])
+    return merged
+
+# ─────────── Search (KMP) ───────────
+def kmp_search(pattern, text):
+    def compute_lps(pat):
+        lps = [0] * len(pat)
+        length = 0
+        i = 1
+        while i < len(pat):
+            if pat[i] == pat[length]:
+                length += 1
+                lps[i] = length
+                i += 1
+            else:
+                if length != 0:
+                    length = lps[length - 1]
+                else:
+                    lps[i] = 0
+                    i += 1
+        return lps
+
+    lps = compute_lps(pattern)
+    i = j = 0
+    while i < len(text):
+        if pattern[j] == text[i]:
+            i += 1; j += 1
+            if j == len(pattern):
+                return True
+        else:
+            if j != 0:
+                j = lps[j - 1]
+            else:
+                i += 1
+    return False
 class EmergencyResponseManager:
     def __init__(self, root):
         self.root = root
@@ -31,8 +81,8 @@ class EmergencyResponseManager:
         style.configure('TCombobox', fieldbackground='#003366', background='#003366',
                         foreground='white', font=(font_name, 12))
         style.configure('Accent.TButton', font=(font_name, 14, "bold"))
-        style.configure("Time.TCombobox", fieldbackground='#001f3f',background='#001f3f', foreground="white", arrowcolor="black")
-        style.map("Time.TCombobox",fieldbackground=[("readonly", '#001f3f')],background=[("readonly", '#001f3f')],foreground=[("!disabled", "white")])
+        style.configure("Time.TCombobox", fieldbackground='#003366',background='#003366', foreground="white", arrowcolor="black")
+        style.map("Time.TCombobox",fieldbackground=[("readonly", '#003366')],background=[("readonly", '#003366')],foreground=[("!disabled", "white")])
         
         # Store incidents and tracking variables
         self.incidents = []
@@ -71,7 +121,7 @@ class EmergencyResponseManager:
             3: "Missing Pet",             # Medium
             4: "Water Main Break",        # Low
             5: "Hazardous Materials",     # Critical
-            6: "Medical Emergency"         # Medium
+            6: "Medical Emergency"        # Medium
         }
         
         # Resource combinations matching your test.py INCIDENTS
@@ -127,7 +177,7 @@ class EmergencyResponseManager:
         main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Title
-        title_label = ttk.Label(main_frame, text="Emergency Response Manager", font=("Arial", 18, "bold"))
+        title_label = ttk.Label(main_frame, text="Emergency Response Manager", font=("Comic Sans MS", 22, "bold"))
         title_label.pack(pady=10)
         
         # Create a frame that will contain both the map and the controls
@@ -205,6 +255,31 @@ class EmergencyResponseManager:
         ttk.Label(control_frame, text="Selected Incidents:").pack(anchor=tk.W, pady=(10, 5))
         self.incident_list = tk.Listbox(control_frame, height=8, width=50, bg='#003366', fg='white')
         self.incident_list.pack(fill=tk.X, pady=5)
+        
+        # ─────────── Sort Incidents ───────────
+        sort_frame = ttk.LabelFrame(control_frame, text="Sort Incidents", padding=10)
+        sort_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(sort_frame, text="Sort By:").grid(row=0, column=0, sticky=tk.W)
+        self.sort_var = tk.StringVar(value="Priority")
+        self.sort_combo = ttk.Combobox(
+            sort_frame,
+            textvariable=self.sort_var,
+            values=["Priority", "Time"],
+            width=10,
+            state="readonly",
+            style="Time.TCombobox"
+        )
+        self.sort_combo.grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(sort_frame, text="Sort", command=self.sort_incidents).grid(row=0, column=2, padx=5)
+
+        # ─────────── Search Logs ───────────
+        search_frame = ttk.LabelFrame(control_frame, text="Incident Log Search", padding=10)
+        search_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(search_frame, text="Keyword:").grid(row=0, column=0, sticky=tk.W)
+        self.search_var   = tk.StringVar()
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(search_frame, text="Search", command=self.search_logs).grid(row=0, column=2, padx=5)
         
         # Optimize and Generate Log buttons
         ttk.Button(
@@ -702,6 +777,49 @@ class EmergencyResponseManager:
                 messagebox.showerror("Export Failed", f"Error exporting log: {str(e)}")
         
         ttk.Button(export_frame, text="Export Log", command=export_log).pack(side=tk.RIGHT, padx=10)
+
+    def sort_incidents(self):
+        # choose key
+        if self.sort_var.get() == "Priority":
+            key = lambda inc: -inc["priority"].value
+        else:
+            key = lambda inc: inc["time"]
+        # sort & refresh listbox
+        self.incidents = merge_sort(self.incidents, key=key)
+        self.incident_list.delete(0, tk.END)
+        for inc in self.incidents:
+            txt = f"{inc['type']} @ {inc['node']} ({inc['time'].strftime('%H:%M')})"
+            self.incident_list.insert(tk.END, txt)
+            self.incident_list.itemconfig(
+                tk.END, {'fg': self.priority_colors[inc['priority']]}
+            )
+
+    def search_logs(self):
+        kw = self.search_var.get().strip().lower()
+        if not kw:
+            messagebox.showwarning("Warning", "Enter a keyword to search.")
+            return
+        matches = []
+        for inc in self.completed_incidents:
+            hay = f"{inc['type']} {inc['node']} {inc['priority'].name}".lower()
+            if kmp_search(kw, hay):
+                matches.append(inc)
+        # popup results
+        win = tk.Toplevel(self.root)
+        win.title(f"Search: '{kw}'")
+        txt = tk.Text(win, bg='#003366', fg='white')
+        txt.pack(fill=tk.BOTH, expand=True)
+        if not matches:
+            txt.insert(tk.END, "No matches found.")
+        else:
+            for m in matches:
+                txt.insert(tk.END,
+                    f"Type: {m['type']}\n"
+                    f"Loc:  {m['node']}\n"
+                    f"Prio: {m['priority'].name}\n"
+                    f"Time: {m['time'].strftime('%H:%M')}\n\n"
+                )
+        txt.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     root = tk.Tk()
