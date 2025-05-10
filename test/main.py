@@ -63,6 +63,16 @@ class EmergencyResponseManager:
             Priority.LOW: 30,        # 30 minutes for Low
             Priority.INFO: 15        # 15 minutes for Info
         }
+
+        # Define incident types with descriptions
+        self.incident_types = {
+            1: "Building Fire",           # Critical
+            2: "Major Traffic Accident",  # High
+            3: "Medical Emergency",       # Medium
+            4: "Water Main Break",        # Low
+            5: "Hazardous Materials",     # Critical
+            6: "Missing Pet"              # Medium
+        }
         
         # Resource combinations matching your test.py INCIDENTS
         self.incident_resource_options = [
@@ -76,12 +86,12 @@ class EmergencyResponseManager:
         
         # Assign fixed priorities to each incident type
         self.incident_priorities = {
-            1: Priority.CRITICAL,
-            2: Priority.HIGH,  # Fixed: Changed from INFO to HIGH
-            3: Priority.MEDIUM,
-            4: Priority.LOW,
-            5: Priority.CRITICAL,
-            6: Priority.MEDIUM
+            1: Priority.CRITICAL,  # Building Fire
+            2: Priority.HIGH,      # Major Traffic Accident
+            3: Priority.MEDIUM,    # Medical Emergency
+            4: Priority.LOW,       # Water Main Break
+            5: Priority.CRITICAL,  # Hazardous Materials
+            6: Priority.MEDIUM     # Missing Person
         }
         
         # Create UI components
@@ -141,13 +151,14 @@ class EmergencyResponseManager:
         content_frame.rowconfigure(0, weight=1)
         
         # Priority information display
-        priority_frame = ttk.LabelFrame(control_frame, text="Incident Priorities", padding=10)
+        priority_frame = ttk.LabelFrame(control_frame, text="Incident Types", padding=10)
         priority_frame.pack(fill=tk.X, pady=5)
-        
-        for i, priority in self.incident_priorities.items():
+
+        for i, incident_type in self.incident_types.items():
+            priority = self.incident_priorities[i]
             ttk.Label(
-                priority_frame, 
-                text=f"Incident {i}: {priority.name} ({self.priority_durations[priority]} min)", 
+                priority_frame,
+                text=f"{incident_type}: {priority.name} ({self.priority_durations[priority]} min)",
                 foreground=self.priority_colors[priority]
             ).pack(anchor=tk.W)
         
@@ -158,7 +169,7 @@ class EmergencyResponseManager:
         # Select incident
         ttk.Label(incident_frame, text="Select Incident Type:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.incident_var = tk.StringVar()
-        self.incident_combo = ttk.Combobox(incident_frame, textvariable=self.incident_var, width=50)
+        self.incident_combo = ttk.Combobox(incident_frame, textvariable=self.incident_var, width=70)
         self.incident_combo.grid(row=0, column=1, pady=5, sticky=tk.W)
         
         # Location entry
@@ -256,20 +267,22 @@ class EmergencyResponseManager:
         )
         self.ax.margins(0.1)
         self.ax.axis('off')
-    
+
     def update_comboboxes(self):
-        # Format incident options to match resource combinations with priorities
+        # Format incident options to match resource combinations with priorities and descriptive names
         incident_options = [
-            f"Incident {i+1} (Fire Trucks: {res['Fire Trucks']}, Ambulances: {res['Ambulances']}, Police Cars: {res['Police Cars']}) - {self.incident_priorities[i+1].name}"
+            (f"{self.incident_types[i+1]} (Fire Trucks: "
+             f"{res['Fire Trucks']}, Ambulances: {res['Ambulances']}, "
+             f"Police Cars: {res['Police Cars']}) - {self.incident_priorities[i+1].name}")
             for i, res in enumerate(self.incident_resource_options)
         ]
         self.incident_combo['values'] = incident_options
         self.location_combo['values'] = self.node_labels
-        
+
         # Auto-select first values if nothing is selected
         if not self.incident_var.get() and incident_options:
             self.incident_combo.current(0)
-        
+
         if not self.location_var.get() and self.node_labels:
             self.location_combo.current(0)
     
@@ -278,16 +291,16 @@ class EmergencyResponseManager:
         if 0 <= incident_index < len(self.incident_resource_options):
             return self.incident_resource_options[incident_index]
         return {'Fire Trucks': 0, 'Ambulances': 0, 'Police Cars': 0}
-    
+
     def add_incident(self):
         incident_option = self.incident_var.get()
         location = self.location_var.get()
         time_str = self.time_var.get()
-        
+
         if not incident_option or not location:
             messagebox.showwarning("Warning", "Please select both an incident type and location.")
             return
-        
+
         # Parse the time
         try:
             hours, minutes = map(int, time_str.split(":"))
@@ -295,38 +308,43 @@ class EmergencyResponseManager:
         except ValueError:
             messagebox.showwarning("Warning", "Invalid time format. Please use HH:MM.")
             return
-        
-        # Extract the incident index from the selection
+
+        # Extract the incident type from the selection
         try:
-            incident_text = incident_option.split()[1]  # Get the second word (should be "1" or "1:" etc)
-            incident_index = int(''.join(filter(str.isdigit, incident_text))) - 1
+            # Find which incident type we're dealing with
+            incident_type_name = incident_option.split('(')[0].strip()
+
+            # Find the incident type ID by name
+            incident_index = next(i for i, name in self.incident_types.items() if name == incident_type_name) - 1
+
             resource_needs = self.get_resource_needs(incident_index)
             priority = self.incident_priorities[incident_index + 1]
-            
+
             # Get the duration based on priority
             duration = self.priority_durations[priority]
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, StopIteration) as e:
             messagebox.showwarning("Warning", f"Invalid incident selection: {str(e)}")
             return
-        
+
         # Create incident entry for display with priority
-        incident_entry = f"{incident_option.split('(')[0].strip()} @ {location} ({time_str}) - {priority.name}"
-        
-        # Add incident to our list with priority
+        incident_entry = f"{incident_type_name} @ {location} ({time_str}) - {priority.name}"
+
+        # Add incident to our list with priority and type name
         self.incidents.append({
-            "type": f"Incident {incident_index + 1}",
+            "type": incident_type_name,
+            "type_id": incident_index + 1,
             "node": location,
             "time": incident_time,
             "needs": resource_needs,
             "priority": priority,
             "duration": duration
         })
-        
+
         # Add to listbox with color coding
         self.incident_list.insert(tk.END, incident_entry)
         idx = self.incident_list.size() - 1
         self.incident_list.itemconfig(idx, {'fg': self.priority_colors[priority]})
-        
+
         # Clear selection
         self.incident_var.set("")
         self.location_var.set("")
