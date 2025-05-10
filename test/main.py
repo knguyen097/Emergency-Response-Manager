@@ -31,6 +31,8 @@ class EmergencyResponseManager:
         style.configure('TCombobox', fieldbackground='#003366', background='#003366',
                         foreground='white', font=(font_name, 12))
         style.configure('Accent.TButton', font=(font_name, 14, "bold"))
+        style.configure("Time.TCombobox", fieldbackground='#001f3f',background='#001f3f', foreground="white", arrowcolor="black")
+        style.map("Time.TCombobox",fieldbackground=[("readonly", '#001f3f')],background=[("readonly", '#001f3f')],foreground=[("!disabled", "white")])
         
         # Store incidents
         self.incidents = []
@@ -124,12 +126,20 @@ class EmergencyResponseManager:
         self.location_combo = ttk.Combobox(incident_frame, textvariable=self.location_var, width=50)
         self.location_combo.grid(row=1, column=1, pady=5, sticky=tk.W)
         
-        # Time entry
+        # Time dropdown (HH:MM for hours 01–12)
         ttk.Label(incident_frame, text="Time (HH:MM):").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.time_var = tk.StringVar(value="12:00")
-        time_entry = ttk.Entry(incident_frame, textvariable=self.time_var, width=10)
-        time_entry.grid(row=2, column=1, pady=5, sticky=tk.W)
-        
+        time_options = [f"{h:02d}:00" for h in range(1, 13)]
+        self.time_combo = ttk.Combobox(
+            incident_frame,
+            textvariable=self.time_var,
+            values=time_options,
+            width=10,
+            state="readonly",
+            style="Time.TCombobox"
+        )
+        self.time_combo.grid(row=2, column=1, pady=5, sticky=tk.W)
+
         # Button frame
         button_frame = ttk.Frame(incident_frame)
         button_frame.grid(row=3, column=0, columnspan=2, pady=10)
@@ -172,7 +182,7 @@ class EmergencyResponseManager:
         nx.draw(
             self.G, pos,
             labels=labels,
-            node_size=9000,
+            node_size=6000,
             node_shape='s',
             node_color='#004080',
             edgecolors='white',
