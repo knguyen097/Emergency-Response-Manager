@@ -96,6 +96,34 @@ class EmergencyResponseManager:
         # Node options for locations
         self.node_labels = ['HQ', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
         
+        # Priority colors
+        self.priority_colors = {
+            Priority.CRITICAL: "#ff0000",  # Red
+            Priority.HIGH: "#ffa500",      # Orange
+            Priority.MEDIUM: "#ffff00",    # Yellow
+            Priority.LOW: "#00ff00",       # Green
+            Priority.INFO: "#4287f5"       # Blue
+        }
+        
+        # Fixed incident duration based on priority
+        self.priority_durations = {
+            Priority.CRITICAL: 120,  # 120 minutes for Critical
+            Priority.HIGH: 90,       # 90 minutes for High
+            Priority.MEDIUM: 60,     # 60 minutes for Medium
+            Priority.LOW: 30,        # 30 minutes for Low
+            Priority.INFO: 15        # 15 minutes for Info
+        }
+
+        # Define incident types with descriptions
+        self.incident_types = {
+            1: "Building Fire",           # Critical
+            2: "Major Traffic Accident",  # High
+            3: "Missing Pet",             # Medium
+            4: "Water Main Break",        # Low
+            5: "Hazardous Materials",     # Critical
+            6: "Medical Emergency"        # Medium
+        }
+        
         # Resource combinations matching your test.py INCIDENTS
         self.incident_resource_options = [
             {'Fire Trucks': 1, 'Ambulances': 1, 'Police Cars': 0},
@@ -105,6 +133,16 @@ class EmergencyResponseManager:
             {'Fire Trucks': 2, 'Ambulances': 0, 'Police Cars': 0},
             {'Fire Trucks': 0, 'Ambulances': 1, 'Police Cars': 0}
         ]
+        
+        # Assign fixed priorities to each incident type
+        self.incident_priorities = {
+            1: Priority.CRITICAL,  # Building Fire
+            2: Priority.HIGH,      # Major Traffic Accident
+            3: Priority.LOW,       # Missing Pet
+            4: Priority.MEDIUM,    # Water Main Break
+            5: Priority.CRITICAL,  # Hazardous Materials
+            6: Priority.MEDIUM     # Medical Emergency
+        }
         
         # Create UI components
         self.create_ui()
@@ -218,9 +256,44 @@ class EmergencyResponseManager:
         self.incident_list = tk.Listbox(control_frame, height=8, width=50, bg='#003366', fg='white')
         self.incident_list.pack(fill=tk.X, pady=5)
         
-        # Optimize button
-        ttk.Button(control_frame, text="Optimize Response Route", 
-                   command=self.optimize_route, style="Accent.TButton").pack(fill=tk.X, pady=10)
+        # ─────────── Sort Incidents ───────────
+        sort_frame = ttk.LabelFrame(control_frame, text="Sort Incidents", padding=10)
+        sort_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(sort_frame, text="Sort By:").grid(row=0, column=0, sticky=tk.W)
+        self.sort_var = tk.StringVar(value="Priority")
+        self.sort_combo = ttk.Combobox(
+            sort_frame,
+            textvariable=self.sort_var,
+            values=["Priority", "Time"],
+            width=10,
+            state="readonly",
+            style="Time.TCombobox"
+        )
+        self.sort_combo.grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(sort_frame, text="Sort", command=self.sort_incidents).grid(row=0, column=2, padx=5)
+
+        # ─────────── Search Logs ───────────
+        search_frame = ttk.LabelFrame(control_frame, text="Incident Log Search", padding=10)
+        search_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(search_frame, text="Keyword:").grid(row=0, column=0, sticky=tk.W)
+        self.search_var   = tk.StringVar()
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var)
+        self.search_entry.grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(search_frame, text="Search", command=self.search_logs).grid(row=0, column=2, padx=5)
+        
+        # Optimize and Generate Log buttons
+        ttk.Button(
+            control_frame, 
+            text="OPTIMIZE RESPONSE ROUTE",
+            command=self.optimize_route, 
+            style="Accent.TButton"
+        ).pack(fill=tk.X, pady=10)
+        
+        ttk.Button(
+            control_frame, 
+            text="Generate Routes Log", 
+            command=self.generate_routes_log
+        ).pack(fill=tk.X, pady=10)
         
         # Optimized schedule section
         ttk.Label(control_frame, text="Optimized Response Plan:").pack(anchor=tk.W, pady=(10, 5))
@@ -265,7 +338,7 @@ class EmergencyResponseManager:
             edge_labels=nx.get_edge_attributes(self.G, 'weight'),
             font_size=16,
             font_color='black',
-            ax=ax
+            ax=self.ax
         )
         self.ax.margins(0.1)
         self.ax.axis('off')
@@ -507,61 +580,246 @@ class EmergencyResponseManager:
         
         # Display header
         self.schedule_text.insert(tk.END, "Optimized Response Plan:\n\n")
-        for inc in act_sched:
-            st = inc.time.strftime("%H:%M")
-            et = (inc.time + timedelta(minutes=inc.estimated_duration)).strftime("%H:%M")
-            self.schedule_text.insert(
-                tk.END,
-                f"    {inc.id}: {inc.location} | {st}–{et} | Priority {inc.priority.name}\n"
+        
+        for i, incident in enumerate(sorted_incidents, 1):
+            # Track current position for tagging
+            line_start = self.schedule_text.index(tk.END)
+            
+            # Insert incident line with priority
+            duration = incident.get('duration', self.priority_durations[incident['priority']])
+            incident_text = f"{i}. {incident['type']} - {incident['priority'].name} Priority ({duration} min)\n"
+            self.schedule_text.insert(tk.END, incident_text)
+            
+            # Apply color tag
+            line_end = self.schedule_text.index(tk.END + "-1c")
+            tag_name = f"priority_{i}"
+            self.schedule_text.tag_configure(tag_name, foreground=self.priority_colors[incident['priority']])
+            self.schedule_text.tag_add(tag_name, line_start, line_end)
+            
+            # Add incident details
+            self.schedule_text.insert(tk.END, f"   Location: {incident['node']}\n")
+            self.schedule_text.insert(tk.END, f"   Time: {incident['time'].strftime('%H:%M')}\n")
+            
+            # Calculate estimated completion time
+            completion_time = incident['time'] + timedelta(minutes=duration)
+            self.schedule_text.insert(tk.END, f"   Est. Completion: {completion_time.strftime('%H:%M')}\n")
+            
+            self.schedule_text.insert(tk.END, "   Resources:\n")
+            
+            # Create incident log entry
+            incident_log = {
+                "id": f"INC-{len(self.completed_incidents) + 1:03d}",
+                "type": incident['type'],
+                "node": incident['node'],
+                "time": incident['time'],
+                "priority": incident['priority'],
+                "duration": duration,
+                "completion_time": completion_time,
+                "timestamp": timestamp,
+                "resources": []
+            }
+            
+            locations_visited.add(incident['node'])
+            
+            # Process each resource allocation
+            for r, src, d in alloc[incident['node']]:
+                if src:
+                    self.schedule_text.insert(tk.END, f"     {r} from {src} ({d}min)\n")
+                    total_time += d
+                    locations_visited.add(src)
+                    
+                    # Add to resource log
+                    incident_log["resources"].append({
+                        "type": r,
+                        "source": src,
+                        "time": d
+                    })
+                    
+                    # Add route to highlight
+                    path = nx.shortest_path(self.G, src, incident['node'], weight='weight')
+                    routes_to_highlight.append((path, incident['priority']))
+                else:
+                    self.schedule_text.insert(tk.END, f"     No {r} available\n")
+            
+            self.schedule_text.insert(tk.END, "\n")
+            
+            # Add to completed incidents log
+            self.completed_incidents.append(incident_log)
+        
+        # Add summary
+        self.schedule_text.insert(tk.END, f"Summary:\n")
+        self.schedule_text.insert(tk.END, f"Number of incidents: {len(sorted_incidents)}\n")
+        self.schedule_text.insert(tk.END, f"Number of locations: {len(locations_visited)}\n")
+        self.schedule_text.insert(tk.END, f"Total response time: {total_time} minutes\n")
+        
+        # Highlight routes on the map
+        self.highlight_routes(routes_to_highlight)
+    
+    def generate_routes_log(self):
+        """Generate log of all routed incidents"""
+        if not self.completed_incidents:
+            messagebox.showinfo("Info", "No incidents have been routed yet.")
+            return
+        
+        # Create log window
+        log_window = tk.Toplevel(self.root)
+        log_window.title("Routes Log")
+        log_window.geometry("700x500")
+        log_window.configure(bg='#001f3f')
+        
+        # Create log frame
+        log_frame = ttk.Frame(log_window, padding=10)
+        log_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Create text widget for log
+        log_text = tk.Text(log_frame, width=80, height=30, bg='#003366', fg='white')
+        log_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(log_text, command=log_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        log_text.config(yscrollcommand=scrollbar.set)
+        
+        # Insert log header
+        log_text.insert(tk.END, "===== EMERGENCY RESPONSE ROUTES LOG =====\n\n")
+        
+        # Group by optimization batch
+        by_timestamp = {}
+        for incident in self.completed_incidents:
+            timestamp = incident["timestamp"]
+            if timestamp not in by_timestamp:
+                by_timestamp[timestamp] = []
+            by_timestamp[timestamp].append(incident)
+        
+        # Process each batch
+        for timestamp, incidents in by_timestamp.items():
+            log_text.insert(tk.END, f"=== Batch: {timestamp} ===\n")
+            log_text.insert(tk.END, f"Number of Incidents: {len(incidents)}\n\n")
+            
+            # Track batch statistics
+            total_routes = 0
+            total_time = 0
+            all_routes = []
+            
+            # Process each incident
+            for incident in incidents:
+                # Set priority tag
+                priority_tag = f"priority_{incident['priority'].name}"
+                log_text.tag_configure(priority_tag, foreground=self.priority_colors[incident['priority']])
+                
+                # Insert incident details
+                log_text.insert(tk.END, f"Incident: {incident['id']}\n")
+                log_text.insert(tk.END, f"Type: {incident['type']}\n")
+                log_text.insert(tk.END, f"Location: {incident['node']}\n")
+                log_text.insert(tk.END, f"Time: {incident['time'].strftime('%H:%M')}\n")
+                
+                # Add completion time if available
+                if 'completion_time' in incident:
+                    log_text.insert(tk.END, f"Est. Completion: {incident['completion_time'].strftime('%H:%M')}\n")
+                
+                # Insert priority with color
+                log_text.insert(tk.END, "Priority: ")
+                log_text.insert(tk.END, f"{incident['priority'].name}", priority_tag)
+                log_text.insert(tk.END, f" ({incident.get('duration', 0)} min)\n")
+                
+                # Insert routes
+                log_text.insert(tk.END, "Routes:\n")
+                
+                # Process resources/routes
+                incident_time = 0
+                if incident['resources']:
+                    for resource in incident['resources']:
+                        route_str = f"  {resource['type']} from {resource['source']} to {incident['node']} ({resource['time']}min)"
+                        log_text.insert(tk.END, f"{route_str}\n")
+                        
+                        incident_time += resource['time']
+                        total_time += resource['time']
+                        total_routes += 1
+                        
+                        all_routes.append(f"{resource['source']} → {incident['node']}")
+                    
+                    log_text.insert(tk.END, f"Total Route Time: {incident_time} minutes\n")
+                else:
+                    log_text.insert(tk.END, "  No resources allocated\n")
+                
+                log_text.insert(tk.END, "\n")
+            
+            # Add batch summary
+            log_text.insert(tk.END, "Batch Summary:\n")
+            log_text.insert(tk.END, f"Total Routes: {total_routes}\n")
+            log_text.insert(tk.END, f"Total Travel Time: {total_time} minutes\n")
+            if all_routes:
+                log_text.insert(tk.END, f"Routes: {', '.join(all_routes)}\n")
+            log_text.insert(tk.END, "\n\n")
+        
+        # Make text read-only
+        log_text.config(state=tk.DISABLED)
+        
+        # Add export button
+        export_frame = ttk.Frame(log_window)
+        export_frame.pack(fill=tk.X, pady=10)
+        
+        def export_log():
+            try:
+                # Create logs directory if needed
+                import os
+                if not os.path.exists("logs"):
+                    os.makedirs("logs")
+                
+                # Create log file with timestamp
+                filename = f"logs/routes_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+                
+                with open(filename, "w") as f:
+                    f.write(log_text.get("1.0", tk.END))
+                
+                messagebox.showinfo("Export Successful", f"Log exported to {filename}")
+            except Exception as e:
+                messagebox.showerror("Export Failed", f"Error exporting log: {str(e)}")
+        
+        ttk.Button(export_frame, text="Export Log", command=export_log).pack(side=tk.RIGHT, padx=10)
+
+    def sort_incidents(self):
+        # choose key
+        if self.sort_var.get() == "Priority":
+            key = lambda inc: -inc["priority"].value
+        else:
+            key = lambda inc: inc["time"]
+        # sort & refresh listbox
+        self.incidents = merge_sort(self.incidents, key=key)
+        self.incident_list.delete(0, tk.END)
+        for inc in self.incidents:
+            txt = f"{inc['type']} @ {inc['node']} ({inc['time'].strftime('%H:%M')})"
+            self.incident_list.insert(tk.END, txt)
+            self.incident_list.itemconfig(
+                tk.END, {'fg': self.priority_colors[inc['priority']]}
             )
 
-        # 5. Route summary 
-        total_time = sum(d for _, _, d in alloc.values() for d in [d] if d)
-        locations_visited = {inc["node"] for inc in sorted_incidents}
-        self.route_text.insert(tk.END, f"Route Information:\n")
-        self.route_text.insert(tk.END, f"  Incidents: {len(sorted_incidents)}\n")
-        self.route_text.insert(tk.END, f"  Locations: {len(locations_visited)}\n")
-        self.route_text.insert(tk.END, f"  Total response time: {total_time} minutes\n")
-
-        
-    def _show_mst(self):
-        T = nx.minimum_spanning_tree(self.G, weight='weight')
-        
-        fig, ax = plt.subplots()
-        pos = nx.get_node_attributes(self, 'pos')  
-        nx.draw_networkx_nodes(T, pos, node_size=300, ax=ax)
-        nx.draw_networkx_labels(T, pos, ax=ax)
-        nx.draw_networkx_edges(T, pos, edgelist=T.edges(), width=2, edge_color='red', ax=ax)
-        self.canvas.figure = fig
-        self.canvas.draw()
-    
-    def _schedule_activity(self):
-        sched = IncidentScheduler()
-        sched.incidents = self.incidents             
-        chosen = sched.activity_selection_greedy(sched.incidents)
-        self._display_schedule(chosen, title="Activity-Selection Schedule")
-
-    
-    def _display_schedule(self, incidents, title="Schedule"):
-        dlg = tk.Toplevel(self.root)
-        dlg.title(title)
-        txt = tk.Text(dlg, width=50, height=15)
-        for inc in incidents:
-            st = inc.time.strftime("%H:%M")
-            et = (inc.time + timedelta(minutes=inc.estimated_duration)).strftime("%H:%M")
-            txt.insert(tk.END, f"{inc.id} | {inc.priority.name:<8} | {st}–{et} | {inc.location}\n")
-        txt.pack(padx=10, pady=10)
-
-    def _sort_incidents(self, by="priority", algo="merge"):
-        sched = IncidentScheduler()
-        sched.incidents = self.incidents
-        if by == "priority":
-            sorted_list = sched.sort_by_priority(algo)
-        elif by == "time":
-            sorted_list = sched.sort_by_time(algo)
+    def search_logs(self):
+        kw = self.search_var.get().strip().lower()
+        if not kw:
+            messagebox.showwarning("Warning", "Enter a keyword to search.")
+            return
+        matches = []
+        for inc in self.completed_incidents:
+            hay = f"{inc['type']} {inc['node']} {inc['priority'].name}".lower()
+            if kmp_search(kw, hay):
+                matches.append(inc)
+        # popup results
+        win = tk.Toplevel(self.root)
+        win.title(f"Search: '{kw}'")
+        txt = tk.Text(win, bg='#003366', fg='white')
+        txt.pack(fill=tk.BOTH, expand=True)
+        if not matches:
+            txt.insert(tk.END, "No matches found.")
         else:
-            sorted_list = sched.sort_by_location(algo)
-        self._display_schedule(sorted_list, title=f"Sorted by {by.title()} ({algo})")
+            for m in matches:
+                txt.insert(tk.END,
+                    f"Type: {m['type']}\n"
+                    f"Loc:  {m['node']}\n"
+                    f"Prio: {m['priority'].name}\n"
+                    f"Time: {m['time'].strftime('%H:%M')}\n\n"
+                )
+        txt.config(state=tk.DISABLED)
 
 if __name__ == "__main__":
     root = tk.Tk()
