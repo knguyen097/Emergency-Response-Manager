@@ -432,7 +432,7 @@ class EmergencyResponseManager:
         # Sort incidents by priority first, then by time
         sorted_incidents = sorted(
             self.incidents, 
-            key=lambda x: (x["priority"].value, x["time"])
+            key=lambda x: (-x["priority"].value, x["time"])
         )
         
         # Create a copy of the graph for resource allocation
