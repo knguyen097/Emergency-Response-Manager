@@ -1,0 +1,100 @@
+[
+  {
+    "id": "INC-001",
+    "location": "HQ",
+    "time": "2025-05-08T19:06:48.489016",
+    "type": "Fire",
+    "priority": 5,
+    "required_resources": [
+      {
+        "type": "Fire Truck",
+        "quantity": 2
+      },
+      {
+        "type": "Ambulance",
+        "quantity": 1
+      }
+    ],
+    "description": "Building fire at headquarters",
+    "estimated_duration": 120,
+    "assigned_resources": null,
+    "status": "PENDING",
+    "completion_time": null
+  },
+  {
+    "id": "INC-002",
+    "location": "A",
+    "time": "2025-05-08T20:06:48.489016",
+    "type": "Medical Emergency",
+    "priority": 4,
+    "required_resources": [
+      {
+        "type": "Ambulance",
+        "quantity": 2
+      }
+    ],
+    "description": "Medical emergency",
+    "estimated_duration": 45,
+    "assigned_resources": null,
+    "status": "PENDING",
+    "completion_time": null
+  },
+  {
+    "id": "INC-003",
+    "location": "B",
+    "time": "2025-05-08T21:06:48.489016",
+    "type": "Traffic Accident",
+    "priority": 3,
+    "required_resources": [
+      {
+        "type": "Police Car",
+        "quantity": 1
+      },
+      {
+        "type": "Ambulance",
+        "quantity": 1
+      }
+    ],
+    "description": "Multi-vehicle accident",
+    "estimated_duration": 90,
+    "assigned_resources": null,
+    "status": "PENDING",
+    "completion_time": null
+  },
+  {
+    "id": "INC-004",
+    "location": "C",
+    "time": "2025-05-08T20:36:48.489016",
+    "type": "Fire",
+    "priority": 5,
+    "required_resources": [
+      {
+        "type": "Fire Truck",
+        "quantity": 1
+      }
+    ],
+    "description": "Gas leak with fire hazard",
+    "estimated_duration": 180,
+    "assigned_resources": null,
+    "status": "PENDING",
+    "completion_time": null
+  },
+  {
+    "id": "INC-005",
+    "location": "D",
+    "time": "2025-05-08T22:06:48.489016",
+    "type": "Criminal Activity",
+    "priority": 2,
+    "required_resources": [
+      {
+        "type": "Police Car",
+        "quantity": 2
+      }
+    ],
+    "description": "Theft report",
+    "estimated_duration": 60,
+    "assigned_resources": null,
+    "status": "PENDING",
+    "completion_time": null
+  }
+]
