@@ -55,6 +55,15 @@ class EmergencyResponseManager:
             Priority.INFO: "#4287f5"       # Blue
         }
         
+        # Fixed incident duration based on priority
+        self.priority_durations = {
+            Priority.CRITICAL: 120,  # 120 minutes for Critical
+            Priority.HIGH: 90,       # 90 minutes for High
+            Priority.MEDIUM: 60,     # 60 minutes for Medium
+            Priority.LOW: 30,        # 30 minutes for Low
+            Priority.INFO: 15        # 15 minutes for Info
+        }
+        
         # Resource combinations matching your test.py INCIDENTS
         self.incident_resource_options = [
             {'Fire Trucks': 1, 'Ambulances': 1, 'Police Cars': 0},
@@ -65,9 +74,15 @@ class EmergencyResponseManager:
             {'Fire Trucks': 0, 'Ambulances': 1, 'Police Cars': 0}
         ]
         
-        # Assign random priority to each incident
-        self.incident_priorities = {}
-        self.randomize_priorities()
+        # Assign fixed priorities to each incident type
+        self.incident_priorities = {
+            1: Priority.CRITICAL,
+            2: Priority.HIGH,  # Fixed: Changed from INFO to HIGH
+            3: Priority.MEDIUM,
+            4: Priority.LOW,
+            5: Priority.CRITICAL,
+            6: Priority.MEDIUM
+        }
         
         # Create UI components
         self.create_ui()
@@ -95,11 +110,6 @@ class EmergencyResponseManager:
             G.nodes[n]['Fire Trucks'] = random.randint(0, 2)
             G.nodes[n]['Ambulances'] = random.randint(0, 2)
             G.nodes[n]['Police Cars'] = random.randint(0, 2)
-    
-    def randomize_priorities(self):
-        """Assign random priorities to each incident type"""
-        for i in range(len(self.incident_resource_options)):
-            self.incident_priorities[i+1] = random.choice(list(Priority))
     
     def create_ui(self):
         # Main frame
@@ -137,15 +147,9 @@ class EmergencyResponseManager:
         for i, priority in self.incident_priorities.items():
             ttk.Label(
                 priority_frame, 
-                text=f"Incident {i}: {priority.name}", 
+                text=f"Incident {i}: {priority.name} ({self.priority_durations[priority]} min)", 
                 foreground=self.priority_colors[priority]
             ).pack(anchor=tk.W)
-        
-        ttk.Button(
-            priority_frame, 
-            text="Randomize Priorities", 
-            command=self.randomize_and_update_priorities
-        ).pack(fill=tk.X, pady=5)
         
         # Incident Selection Section
         incident_frame = ttk.Frame(control_frame)
@@ -269,36 +273,6 @@ class EmergencyResponseManager:
         if not self.location_var.get() and self.node_labels:
             self.location_combo.current(0)
     
-    def randomize_and_update_priorities(self):
-        """Randomize priorities and update UI"""
-        self.randomize_priorities()
-        
-        # Clear and rebuild priority frame
-        for widget in self.root.winfo_children():
-            if isinstance(widget, ttk.Frame):
-                for child in widget.winfo_children():
-                    if isinstance(child, ttk.Frame):
-                        for grandchild in child.winfo_children():
-                            if isinstance(grandchild, ttk.LabelFrame) and grandchild.cget("text") == "Incident Priorities":
-                                # Clear existing labels
-                                for w in grandchild.winfo_children():
-                                    if isinstance(w, ttk.Label):
-                                        w.destroy()
-                                
-                                # Add new priority labels
-                                for i, priority in self.incident_priorities.items():
-                                    ttk.Label(
-                                        grandchild, 
-                                        text=f"Incident {i}: {priority.name}", 
-                                        foreground=self.priority_colors[priority]
-                                    ).pack(anchor=tk.W)
-                                break
-        
-        # Update comboboxes with new priorities
-        self.update_comboboxes()
-        
-        messagebox.showinfo("Info", "Incident priorities have been randomized!")
-    
     def get_resource_needs(self, incident_index):
         # Get the resource needs directly from our predefined options
         if 0 <= incident_index < len(self.incident_resource_options):
@@ -328,6 +302,9 @@ class EmergencyResponseManager:
             incident_index = int(''.join(filter(str.isdigit, incident_text))) - 1
             resource_needs = self.get_resource_needs(incident_index)
             priority = self.incident_priorities[incident_index + 1]
+            
+            # Get the duration based on priority
+            duration = self.priority_durations[priority]
         except (ValueError, IndexError) as e:
             messagebox.showwarning("Warning", f"Invalid incident selection: {str(e)}")
             return
@@ -341,7 +318,8 @@ class EmergencyResponseManager:
             "node": location,
             "time": incident_time,
             "needs": resource_needs,
-            "priority": priority
+            "priority": priority,
+            "duration": duration
         })
         
         # Add to listbox with color coding
@@ -478,7 +456,8 @@ class EmergencyResponseManager:
             line_start = self.schedule_text.index(tk.END)
             
             # Insert incident line with priority
-            incident_text = f"{i}. {incident['type']} - {incident['priority'].name} Priority\n"
+            duration = incident.get('duration', self.priority_durations[incident['priority']])
+            incident_text = f"{i}. {incident['type']} - {incident['priority'].name} Priority ({duration} min)\n"
             self.schedule_text.insert(tk.END, incident_text)
             
             # Apply color tag
@@ -490,6 +469,11 @@ class EmergencyResponseManager:
             # Add incident details
             self.schedule_text.insert(tk.END, f"   Location: {incident['node']}\n")
             self.schedule_text.insert(tk.END, f"   Time: {incident['time'].strftime('%H:%M')}\n")
+            
+            # Calculate estimated completion time
+            completion_time = incident['time'] + timedelta(minutes=duration)
+            self.schedule_text.insert(tk.END, f"   Est. Completion: {completion_time.strftime('%H:%M')}\n")
+            
             self.schedule_text.insert(tk.END, "   Resources:\n")
             
             # Create incident log entry
@@ -499,6 +483,8 @@ class EmergencyResponseManager:
                 "node": incident['node'],
                 "time": incident['time'],
                 "priority": incident['priority'],
+                "duration": duration,
+                "completion_time": completion_time,
                 "timestamp": timestamp,
                 "resources": []
             }
@@ -597,9 +583,14 @@ class EmergencyResponseManager:
                 log_text.insert(tk.END, f"Location: {incident['node']}\n")
                 log_text.insert(tk.END, f"Time: {incident['time'].strftime('%H:%M')}\n")
                 
+                # Add completion time if available
+                if 'completion_time' in incident:
+                    log_text.insert(tk.END, f"Est. Completion: {incident['completion_time'].strftime('%H:%M')}\n")
+                
                 # Insert priority with color
                 log_text.insert(tk.END, "Priority: ")
-                log_text.insert(tk.END, f"{incident['priority'].name}\n", priority_tag)
+                log_text.insert(tk.END, f"{incident['priority'].name}", priority_tag)
+                log_text.insert(tk.END, f" ({incident.get('duration', 0)} min)\n")
                 
                 # Insert routes
                 log_text.insert(tk.END, "Routes:\n")
